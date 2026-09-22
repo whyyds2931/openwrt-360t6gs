@@ -7,8 +7,9 @@
 # 1. 复制设备 DTS 文件
 mkdir -p target/linux/ramips/dts
 cp $GITHUB_WORKSPACE/mt7621_qihoo_360t6gs.dts target/linux/ramips/dts/
+echo "DTS文件已复制: $(ls -la target/linux/ramips/dts/mt7621_qihoo_360t6gs.dts)"
 
-# 2. 追加设备定义到 mt7621.mk
+# 2. 追加设备定义到 mt7621.mk（完整格式，含KERNEL_IN_UBI）
 cat >> target/linux/ramips/image/mt7621.mk << 'EOF'
 
 define Device/qihoo_360t6gs
@@ -17,6 +18,7 @@ define Device/qihoo_360t6gs
   DEVICE_VENDOR := Qihoo
   DEVICE_MODEL := 360 T6GS
   IMAGE_SIZE := 125000k
+  KERNEL_IN_UBI := 1
   UBINIZE_OPTS := -E 5
   IMAGES += firmware.bin
   IMAGE/firmware.bin := append-kernel | pad-to $$(KERNEL_SIZE) | append-ubi | check-size
@@ -24,6 +26,8 @@ define Device/qihoo_360t6gs
 endef
 TARGET_DEVICES += qihoo_360t6gs
 EOF
+echo "设备定义已追加:"
+grep -A 15 "define Device/qihoo_360t6gs" target/linux/ramips/image/mt7621.mk
 
 # 3. 添加第三方插件源（UA3F + 深澜 + 常用插件）
 sed -i '$a src-git kenzo https://github.com/kenzok8/openwrt-packages' feeds.conf.default
