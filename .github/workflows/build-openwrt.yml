@@ -84,6 +84,12 @@ jobs:
       run: |
         cd openwrt
         make defconfig
+        # make defconfig后强制锁定360t6gs设备（防止回退到默认设备）
+        sed -i '/CONFIG_TARGET_DEVICE_.*=y/d' .config
+        echo 'CONFIG_TARGET_DEVICE_ramips_mt7621_DEVICE_qihoo_360t6gs=y' >> .config
+        echo 'CONFIG_TARGET_DEVICE_PACKAGES_ramips_mt7621_DEVICE_qihoo_360t6gs="kmod-mt7915-firmware"' >> .config
+        echo "=== defconfig后设备锁定 ==="
+        grep "CONFIG_TARGET_DEVICE" .config
         make download -j8
         find dl -size -1024c -exec ls -l {} \;
         find dl -size -1024c -exec rm -f {} \;
