@@ -1,19 +1,11 @@
-# Qihoo 360 T6GS profile for OpenWrt 23.05.
-#
-# This is an overlay fragment, not a replacement for the upstream device
-# table. diy-part1.sh appends it to target/linux/ramips/image/mt7621.mk
-# after removing any previous copy of this profile.
+# Native ImmortalWrt/OpenWrt profile for the 360 T6GS.
+# The device uses a 16 MiB SPI-NOR flash, not NAND/UBI.
 
-define Device/qihoo_360t6gs
-  $(Device/nand)
-  $(Device/uimage-lzma-loader)
-  DEVICE_VENDOR := Qihoo
+define Device/360_360t6gs
+  $(Device/dsa-migration)
+  IMAGE_SIZE := 15872k
+  DEVICE_VENDOR := 360
   DEVICE_MODEL := 360T6GS
-  DEVICE_DTS := mt7621_qihoo_360t6gs
-  IMAGE_SIZE := 128512k
-  IMAGES += firmware.bin
-  IMAGE/firmware.bin := append-kernel | pad-to $$(KERNEL_SIZE) | append-ubi | \
-	check-size
-  DEVICE_PACKAGES := kmod-mt7915-firmware
+  DEVICE_PACKAGES := kmod-mt7915e kmod-mt7915-firmware -uboot-envtools
 endef
-TARGET_DEVICES += qihoo_360t6gs
+TARGET_DEVICES += 360_360t6gs
