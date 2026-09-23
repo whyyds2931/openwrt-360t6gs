@@ -1,15 +1,20 @@
-#!/bin/bash
-#=================================================
-# DIY 脚本 2 - make defconfig 前强制锁定设备
-#=================================================
+#!/usr/bin/env bash
+set -euo pipefail
 
-# 强制只编译360t6gs，关闭其他所有设备
-sed -i 's/CONFIG_TARGET_DEVICE_.*=y/# &/g' .config
-echo 'CONFIG_TARGET_ramips=y' >> .config
-echo 'CONFIG_TARGET_ramips_mt7621=y' >> .config
-echo 'CONFIG_TARGET_DEVICE_ramips_mt7621_DEVICE_qihoo_360t6gs=y' >> .config
-echo 'CONFIG_TARGET_DEVICE_PACKAGES_ramips_mt7621_DEVICE_qihoo_360t6gs="kmod-mt7915-firmware"' >> .config
-echo "设备已锁定为 qihoo_360t6gs"
-grep "CONFIG_TARGET_DEVICE" .config
+# Keep exactly one MT7621 device selected before the first defconfig pass.
+sed -i 's/\r$//' .config
+sed -i '/^CONFIG_TARGET_DEVICE_.*=y$/d' .config
+printf '%s\n' \
+	'CONFIG_TARGET_ramips=y' \
+	'CONFIG_TARGET_ramips_mt7621=y' \
+	'CONFIG_TARGET_DEVICE_ramips_mt7621_DEVICE_qihoo_360t6gs=y' \
+	'CONFIG_TARGET_DEVICE_PACKAGES_ramips_mt7621_DEVICE_qihoo_360t6gs="kmod-mt7915-firmware"' >> .config
 
-echo "=== DIY 2 完成 ==="
+grep -qx 'CONFIG_TARGET_DEVICE_ramips_mt7621_DEVICE_qihoo_360t6gs=y' .config
+if grep -q '^CONFIG_TARGET_DEVICE_ramips_mt7621_DEVICE_.*=y$' .config \
+	&& [ "$(grep -c '^CONFIG_TARGET_DEVICE_ramips_mt7621_DEVICE_.*=y$' .config)" -ne 1 ]; then
+	echo 'More than one MT7621 device is selected' >&2
+	exit 1
+fi
+
+echo 'Selected device: qihoo_360t6gs'

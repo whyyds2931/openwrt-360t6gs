@@ -90,7 +90,10 @@ jobs:
         echo 'CONFIG_TARGET_DEVICE_PACKAGES_ramips_mt7621_DEVICE_qihoo_360t6gs="kmod-mt7915-firmware"' >> .config
         echo "=== defconfig后设备锁定 ==="
         grep "CONFIG_TARGET_DEVICE" .config
-        make download -j8
+        selected_devices=$(grep -E '^CONFIG_TARGET_.*_DEVICE_.*=y$' .config || true)
+        echo "$selected_devices"
+        test "$(printf '%s\n' "$selected_devices" | sed '/^$/d' | wc -l)" -eq 1
+        grep -qx 'CONFIG_TARGET_DEVICE_ramips_mt7621_DEVICE_qihoo_360t6gs=y' .config        make download -j8
         find dl -size -1024c -exec ls -l {} \;
         find dl -size -1024c -exec rm -f {} \;
 
