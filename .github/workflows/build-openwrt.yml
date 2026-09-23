@@ -9,6 +9,10 @@ on:
         required: false
         default: 'false'
 
+permissions:
+  actions: write
+  contents: read
+
 env:
   REPO_URL: https://github.com/openwrt/openwrt
   REPO_BRANCH: openwrt-23.05
@@ -137,9 +141,12 @@ jobs:
 
     - name: Delete workflow runs
       uses: GitRML/delete-workflow-runs@main
+      continue-on-error: true
       with:
         retain_days: 1
         keep_minimum_runs: 3
+      env:
+        GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}
 
     - name: Remove old Releases
       uses: dev-drprasad/delete-older-releases@v0.1.0
