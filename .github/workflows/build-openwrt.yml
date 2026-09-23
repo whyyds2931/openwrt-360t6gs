@@ -1,39 +1,31 @@
-name: Build OpenWrt
+name: Build ImmortalWrt 360 T6GS
 
 on:
-  repository_dispatch:
   workflow_dispatch:
     inputs:
       ssh:
-        description: 'SSH connection to Actions'
+        description: SSH connection to Actions
         required: false
         default: 'false'
 
 permissions:
-  actions: write
   contents: read
+  actions: write
 
 env:
-  REPO_URL: https://github.com/openwrt/openwrt
+  REPO_URL: https://github.com/kelvinzer0/immortalwrt
   REPO_BRANCH: openwrt-23.05
-  FEEDS_CONF: feeds.conf.default
   CONFIG_FILE: .config
   DIY_P1_SH: diy-part1.sh
   DIY_P2_SH: diy-part2.sh
-  UPLOAD_BIN_DIR: false
-  UPLOAD_FIRMWARE: true
-  UPLOAD_COWTRANSFER: false
-  UPLOAD_WETRANSFER: false
-  UPLOAD_RELEASE: false
   TZ: Asia/Shanghai
 
 jobs:
   build:
     runs-on: ubuntu-22.04
-
     steps:
     - name: Checkout
-      uses: actions/checkout@main
+      uses: actions/checkout@v4
 
     - name: Initialization environment
       env:
@@ -45,96 +37,69 @@ jobs:
         sudo -E apt-get -qq autoremove --purge
         sudo -E apt-get -qq clean
         sudo timedatectl set-timezone "$TZ"
-        sudo mkdir -p /workdir
-        sudo chown $USER:$GROUPS /workdir
 
     - name: Clone source code
-      working-directory: /workdir
       run: |
-        df -hT $PWD
-        git clone $REPO_URL -b $REPO_BRANCH openwrt
-        ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
+        git clone --depth=1 "$REPO_URL" -b "$REPO_BRANCH" openwrt
+        echo "OPENWRT_PATH=$GITHUB_WORKSPACE/openwrt" >> "$GITHUB_ENV"
 
-    - name: Load custom feeds
+    - name: Install native board definition
       run: |
-        [ -e $FEEDS_CONF ] && mv $FEEDS_CONF openwrt/feeds.conf.default
-        chmod +x $DIY_P1_SH
-        cd openwrt
-        $GITHUB_WORKSPACE/$DIY_P1_SH
+        chmod +x "$DIY_P1_SH"
+        cd "$OPENWRT_PATH"
+        "$GITHUB_WORKSPACE/$DIY_P1_SH"
 
     - name: Update feeds
-      run: cd openwrt && ./scripts/feeds update -a
+      run: cd "$OPENWRT_PATH" && ./scripts/feeds update -a
 
     - name: Install feeds
-      run: cd openwrt && ./scripts/feeds install -a
+      run: cd "$OPENWRT_PATH" && ./scripts/feeds install -a
 
     - name: Load custom configuration
       run: |
-        [ -e files ] && mv files openwrt/files
-        [ -e $CONFIG_FILE ] && mv $CONFIG_FILE openwrt/.config
-        chmod +x $DIY_P2_SH
-        cd openwrt
-        $GITHUB_WORKSPACE/$DIY_P2_SH
+        cp "$CONFIG_FILE" "$OPENWRT_PATH/.config"
+        chmod +x "$DIY_P2_SH"
+        cd "$OPENWRT_PATH"
+        "$GITHUB_WORKSPACE/$DIY_P2_SH"
 
     - name: SSH connection to Actions
       uses: P3TERX/ssh2actions@v1.0.0
-      if: (github.event.inputs.ssh == 'true' && github.event.inputs.ssh  != 'false') || contains(github.event.action, 'ssh')
+      if: github.event.inputs.ssh == 'true'
       env:
         TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
 
-    - name: Download package
-      id: package
+    - name: Download packages
       run: |
-        cd openwrt
+        cd "$OPENWRT_PATH"
         make defconfig
-        # make defconfig emits CONFIG_TARGET_<target>_DEVICE_<profile>.
-        sed -i -E '/^CONFIG_TARGET_(DEVICE_)?ramips_mt7621_DEVICE_.*=y$/d' .config
-        echo 'CONFIG_TARGET_ramips_mt7621_DEVICE_qihoo_360t6gs=y' >> .config
-        echo 'CONFIG_TARGET_DEVICE_PACKAGES_ramips_mt7621_DEVICE_qihoo_360t6gs="kmod-mt7915-firmware"' >> .config
-        echo "=== defconfig后设备锁定 ==="
-        selected_devices=$(grep -E '^CONFIG_TARGET_ramips_mt7621_DEVICE_.*=y$' .config || true)
-        echo "$selected_devices"
-        test "$(printf '%s\n' "$selected_devices" | sed '/^$/d' | wc -l)" -eq 1
-        grep -qx 'CONFIG_TARGET_ramips_mt7621_DEVICE_qihoo_360t6gs=y' .config
-        make download -j8
-        find dl -size -1024c -exec ls -l {} \;
+        test "$(grep -c '^CONFIG_TARGET_ramips_mt7621_DEVICE_.*=y$' .config)" -eq 1
+        grep -qx 'CONFIG_TARGET_ramips_mt7621_DEVICE_360_360t6gs=y' .config
+        make download -j$(nproc)
         find dl -size -1024c -exec rm -f {} \;
 
-    - name: Compile the firmware
+    - name: Compile firmware
       id: compile
       run: |
-        cd openwrt
-        echo -e "$(nproc) thread compile"
-        make -j$(nproc) || make -j1 || make -j1 V=s
-        echo "status=success" >> $GITHUB_OUTPUT
-        grep '^CONFIG_TARGET.*DEVICE.*=y' .config | head -1 | sed -r 's/.*DEVICE_(.*)=y/\1/' | tr -d '\n' > DEVICE_NAME
-        [ -s DEVICE_NAME ] && echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> $GITHUB_ENV
-        echo "FILE_DATE=_$(date +"%Y%m%d%H%M")" >> $GITHUB_ENV
-
-    - name: Check space usage
-      if: (!cancelled())
-      run: df -hT
-
-    - name: Upload bin directory
-      uses: actions/upload-artifact@main
-      if: steps.compile.outputs.status == 'success' && env.UPLOAD_BIN_DIR == 'true'
-      with:
-        name: OpenWrt_bin${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
-        path: openwrt/bin
+        cd "$OPENWRT_PATH"
+        make -j$(nproc) || make -j1 V=s
+        grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' | tr -d '\n' > DEVICE_NAME
+        echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> "$GITHUB_ENV"
+        echo "FILE_DATE=_$(date +%Y%m%d%H%M)" >> "$GITHUB_ENV"
+        echo "status=success" >> "$GITHUB_OUTPUT"
 
     - name: Organize files
       id: organize
-      if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
+      if: steps.compile.outputs.status == 'success'
       run: |
-        cd openwrt/bin/targets/*/*
+        cd "$OPENWRT_PATH/bin/targets/ramips/mt7621"
         rm -rf packages
-        echo "FIRMWARE=$PWD" >> $GITHUB_ENV
-        echo "status=success" >> $GITHUB_OUTPUT
+        echo "FIRMWARE=$PWD" >> "$GITHUB_ENV"
+        echo "status=success" >> "$GITHUB_OUTPUT"
 
-    - name: Upload firmware directory
-      uses: actions/upload-artifact@main
-      if: steps.organize.outputs.status == 'success' && !cancelled()
+    - name: Upload firmware
+      uses: actions/upload-artifact@v4
+      if: steps.organize.outputs.status == 'success'
       with:
         name: OpenWrt_firmware${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
         path: ${{ env.FIRMWARE }}
@@ -145,14 +110,5 @@ jobs:
       with:
         retain_days: 1
         keep_minimum_runs: 3
-      env:
-        GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}
-
-    - name: Remove old Releases
-      uses: dev-drprasad/delete-older-releases@v0.1.0
-      if: env.UPLOAD_RELEASE == 'true' && !cancelled()
-      with:
-        keep_latest: 3
-        delete_tags: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
