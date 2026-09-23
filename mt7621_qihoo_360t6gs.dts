@@ -7,13 +7,13 @@
 
 / {
 	compatible = "qihoo,360t6gs", "mediatek,mt7621-soc";
-	model = "Qihoo 360 T6GS";
+	model = "Qihoo 360T6GS";
 
 	aliases {
-		led-boot = &led_status_red;
-		led-failsafe = &led_status_red;
-		led-running = &led_status_green;
-		led-upgrade = &led_status_green;
+		led-boot = &led_green;
+		led-failsafe = &led_red;
+		led-running = &led_green;
+		led-upgrade = &led_red;
 		label-mac-device = &gmac0;
 	};
 
@@ -24,20 +24,16 @@
 	leds {
 		compatible = "gpio-leds";
 
-		led_status_red: sys_red {
-			label = "red:sys";
+		led_red: red {
+			label = "red:status";
 			gpios = <&gpio 13 GPIO_ACTIVE_LOW>;
 		};
 
-		led_status_green: sys_green {
-			label = "green:sys";
+		led_green: green {
+			label = "green:status";
 			gpios = <&gpio 15 GPIO_ACTIVE_LOW>;
 		};
 
-		led_status_blue: sys_blue {
-			label = "blue:sys";
-			gpios = <&gpio 10 GPIO_ACTIVE_LOW>;
-		};
 	};
 
 	keys {
@@ -67,7 +63,7 @@
 		#size-cells = <1>;
 
 		partition@0 {
-			label = "u-boot";
+			label = "Bootloader";
 			reg = <0x000000 0x080000>;
 			read-only;
 		};
@@ -75,6 +71,7 @@
 		partition@80000 {
 			label = "u-boot-env";
 			reg = <0x080000 0x040000>;
+			read-only;
 		};
 
 		partition@c0000 {
@@ -90,26 +87,47 @@
 				eeprom_factory: eeprom@0 {
 					reg = <0x0 0xe00>;
 				};
+			};
+		};
 
-				macaddr_factory_3fff4: macaddr@3fff4 {
-					reg = <0x3fff4 0x6>;
-				};
+		partition@100000 {
+			label = "Config";
+			reg = <0x100000 0x040000>;
+			read-only;
+		};
 
-				macaddr_factory_3fffa: macaddr@3fffa {
-					reg = <0x3fffa 0x6>;
+		partition@140000 {
+			label = "config";
+			reg = <0x140000 0x080000>;
+			read-only;
+		};
+
+		partition@1c0000 {
+			label = "factory";
+			reg = <0x1c0000 0x040000>;
+			read-only;
+
+			nvmem-layout {
+				compatible = "fixed-layout";
+				#address-cells = <1>;
+				#size-cells = <1>;
+
+				macaddr_factory_14: macaddr@14 {
+					compatible = "mac-base";
+					reg = <0x14 0x11>;
+					#nvmem-cell-cells = <1>;
 				};
 			};
 		};
 
-		partition@180000 {
+		partition@200000 {
 			label = "kernel";
-			reg = <0x180000 0x400000>;
+			reg = <0x200000 0x400000>;
 		};
 
-		partition@580000 {
-			label = "firmware";
-			reg = <0x580000 0x7a80000>;
-			compatible = "linux,ubi";
+		partition@600000 {
+			label = "ubi";
+			reg = <0x600000 0x7400000>;
 		};
 	};
 };
@@ -129,22 +147,12 @@
 };
 
 &gmac0 {
-	status = "okay";
-	nvmem-cells = <&macaddr_factory_3fff4>;
+	nvmem-cells = <&macaddr_factory_14 0>;
 	nvmem-cell-names = "mac-address";
 };
 
 &gmac1 {
-	status = "okay";
-	label = "wan";
-	nvmem-cells = <&macaddr_factory_3fffa>;
-	nvmem-cell-names = "mac-address";
-
-	fixed-link {
-		speed = <1000>;
-		full-duplex;
-		pause;
-	};
+	status = "disabled";
 };
 
 &switch0 {
