@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Keep the config symbol used by the native ImmortalWrt target.
+# Keep the config symbol used by the official OpenWrt target.
 sed -i 's/\r$//' .config
 sed -i -E '/^CONFIG_TARGET_(DEVICE_)?ramips_mt7621_DEVICE_.*=y$/d' .config
 printf '%s\n' \
