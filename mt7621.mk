@@ -1,4 +1,4 @@
-# Native ImmortalWrt/OpenWrt profile for the 360 T6GS.
+# Native official OpenWrt profile for the 360 T6GS.
 # The device uses a 16 MiB SPI-NOR flash, not NAND/UBI.
 
 define Device/360_360t6gs
