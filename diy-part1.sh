@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Install the board DTS and insert the profile before BuildImage. Appending
-# after BuildImage silently leaves the profile out of the target table.
+# Install the board DTS and place the profile where the selected source tree
+# consumes it. Official OpenWrt needs the pre-BuildImage position; Heleguo's
+# split mt7621.mk is safe to append because image/Makefile includes it later.
 workspace_dir="${GITHUB_WORKSPACE:?GITHUB_WORKSPACE is required}"
 dts_src="$workspace_dir/mt7621_qihoo_360t6gs.dts"
 mk_src="$workspace_dir/mt7621.mk"
@@ -33,10 +34,14 @@ while start >= 0:
 
 anchor = "$(eval $(call BuildImage))"
 pos = source.rfind(anchor)
-if pos < 0:
-    raise SystemExit("BuildImage anchor not found")
+if pos >= 0:
+    source = source[:pos] + "\n" + fragment.rstrip() + "\n\n" + source[pos:]
+else:
+    # Heleguo/lede includes mt7621.mk from image/Makefile, so the profile
+    # must be appended to this subtarget file rather than image/Makefile.
+    source = source.rstrip() + "\n\n" + fragment.rstrip() + "\n"
 
-target.write_text(source[:pos] + "\n" + fragment.rstrip() + "\n\n" + source[pos:])
+target.write_text(source)
 PY
 
 grep -q '^define Device/qihoo_360t6gs$' "$mk_dst"
