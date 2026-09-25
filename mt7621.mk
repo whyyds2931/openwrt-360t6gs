@@ -1,11 +1,20 @@
-# Native official OpenWrt profile for the 360 T6GS.
-# The device uses a 16 MiB SPI-NOR flash, not NAND/UBI.
+# Qihoo 360 T6GS profile for Heleguo/lede.
+# The board has 128 MiB NAND, a separate 4 MiB kernel partition, and a UBI
+# firmware partition. Keep this fragment before the image BuildImage call.
 
-define Device/360_360t6gs
+define Device/qihoo_360t6gs
   $(Device/dsa-migration)
-  IMAGE_SIZE := 15872k
-  DEVICE_VENDOR := 360
-  DEVICE_MODEL := 360T6GS
-  DEVICE_PACKAGES := kmod-mt7915e kmod-mt7915-firmware -uboot-envtools
+  $(Device/uimage-lzma-loader)
+  BLOCKSIZE := 128k
+  PAGESIZE := 2048
+  KERNEL_SIZE := 4096k
+  UBINIZE_OPTS := -E 5
+  DEVICE_VENDOR := Qihoo
+  DEVICE_MODEL := 360 T6GS
+  IMAGE_SIZE := 125000k
+  IMAGES += firmware.bin
+  IMAGE/firmware.bin := append-kernel | pad-to $$(KERNEL_SIZE) | append-ubi | \
+	check-size
+  DEVICE_PACKAGES += kmod-mt7915-firmware
 endef
-TARGET_DEVICES += 360_360t6gs
+TARGET_DEVICES += qihoo_360t6gs
