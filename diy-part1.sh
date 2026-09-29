@@ -1,58 +1,199 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Install the board DTS and place the profile where the selected source tree
-# consumes it. Official OpenWrt needs the pre-BuildImage position; Heleguo's
-# split mt7621.mk is safe to append because image/Makefile includes it later.
-workspace_dir="${GITHUB_WORKSPACE:?GITHUB_WORKSPACE is required}"
-dts_src="$workspace_dir/mt7621_qihoo_360t6gs.dts"
-mk_src="$workspace_dir/mt7621.mk"
-dts_dst="target/linux/ramips/dts/mt7621_qihoo_360t6gs.dts"
-mk_dst="target/linux/ramips/image/mt7621.mk"
+# 注入 360T6GS DTS
+cat > target/linux/ramips/dts/mt7621_qihoo_360t6gs.dts << 'DTS_EOF'
+// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 
-test -f "$dts_src"
-test -f "$mk_src"
-test -f "$mk_dst"
+#include "mt7621.dtsi"
 
-install -Dm0644 "$dts_src" "$dts_dst"
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/input/input.h>
 
-python3 - "$mk_dst" "$mk_src" <<'PY'
-from pathlib import Path
-import sys
+/ {
+	compatible = "qihoo,360t6gs", "mediatek,mt7621-soc";
+	model = "Qihoo 360 T6GS";
 
-target = Path(sys.argv[1])
-fragment = Path(sys.argv[2]).read_text()
-source = target.read_text()
-start = source.find("define Device/qihoo_360t6gs")
-while start >= 0:
-    end_marker = "TARGET_DEVICES += qihoo_360t6gs"
-    end = source.find(end_marker, start)
-    if end < 0:
-        raise SystemExit("incomplete existing qihoo_360t6gs profile")
-    source = source[:start] + source[end + len(end_marker):]
-    start = source.find("define Device/qihoo_360t6gs")
+	aliases {
+		led-boot = &led_status_red;
+		led-failsafe = &led_status_red;
+		led-running = &led_status_green;
+		led-upgrade = &led_status_green;
+		label-mac-device = &gmac0;
+	};
 
-anchor = "$(eval $(call BuildImage))"
-pos = source.rfind(anchor)
-if pos >= 0:
-    source = source[:pos] + "\n" + fragment.rstrip() + "\n\n" + source[pos:]
-else:
-    # Heleguo/lede includes mt7621.mk from image/Makefile, so the profile
-    # must be appended to this subtarget file rather than image/Makefile.
-    source = source.rstrip() + "\n\n" + fragment.rstrip() + "\n"
+	chosen {
+		bootargs = "console=ttyS0,115200n8";
+	};
 
-target.write_text(source)
-PY
+	leds {
+		compatible = "gpio-leds";
 
-grep -q '^define Device/qihoo_360t6gs$' "$mk_dst"
-grep -q '^TARGET_DEVICES += qihoo_360t6gs$' "$mk_dst"
-grep -q 'IMAGE_SIZE := 125000k' "$mk_dst"
-grep -q 'BLOCKSIZE := 128k' "$mk_dst"
-grep -q 'compatible = "qihoo,360t6gs", "mediatek,mt7621-soc";' "$dts_dst"
-grep -q '^&nand {' "$dts_dst"
-grep -q 'label = "firmware";' "$dts_dst"
-! grep -q 'jedec,spi-nor' "$dts_dst"
-! grep -q '360_360t6gs' "$mk_dst"
+		led_status_red: sys_red {
+			label = "red:sys";
+			gpios = <&gpio 13 GPIO_ACTIVE_LOW>;
+		};
 
-echo "Verified NAND target: qihoo_360t6gs"
-echo "DTS: $dts_dst"
+		led_status_green: sys_green {
+			label = "green:sys";
+			gpios = <&gpio 15 GPIO_ACTIVE_LOW>;
+		};
+
+		led_status_blue: sys_blue {
+			label = "blue:sys";
+			gpios = <&gpio 10 GPIO_ACTIVE_LOW>;
+		};
+	};
+
+	keys {
+		compatible = "gpio-keys-polled";
+		poll-interval = <20>;
+
+		reset {
+			label = "reset";
+			gpios = <&gpio 7 GPIO_ACTIVE_LOW>;
+			linux,code = <KEY_RESTART>;
+		};
+
+		wps {
+			label = "wps";
+			gpios = <&gpio 6 GPIO_ACTIVE_LOW>;
+			linux,code = <KEY_WPS_BUTTON>;
+		};
+	};
+};
+
+&nand {
+	status = "okay";
+
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		partition@0 {
+			label = "u-boot";
+			reg = <0x000000 0x080000>;
+			read-only;
+		};
+
+		partition@80000 {
+			label = "u-boot-env";
+			reg = <0x080000 0x040000>;
+		};
+		partition@c0000 {
+			label = "Factory";
+			reg = <0x0c0000 0x040000>;
+			read-only;
+			nvmem-layout {
+				compatible = "fixed-layout";
+				#address-cells = <1>;
+				#size-cells = <1>;
+				eeprom_factory: eeprom@0 {
+					reg = <0x0 0xe00>;
+				};
+
+				macaddr_factory_3fff4: macaddr@3fff4 {
+					reg = <0x3fff4 0x6>;
+				};
+
+				macaddr_factory_3fffa: macaddr@3fffa {
+					reg = <0x3fffa 0x6>;
+				};
+			};
+		};
+		partition@180000 {
+		label = "kernel";
+		reg = <0x180000 0x400000>;
+		};
+		partition@580000 {
+			label = "firmware";
+			reg = <0x580000 0x7a80000>;
+			compatible = "linux,ubi";
+		};
+	};
+};
+&pcie {
+	status = "okay";
+};
+
+&pcie1 {
+	wifi@0,0 {
+		compatible = "mediatek,mt76";
+		reg = <0x0000 0 0 0 0>;
+		nvmem-cells = <&eeprom_factory>;
+		nvmem-cell-names = "eeprom";
+		mediatek,disable-radar-background;
+	};
+};
+
+&gmac0 {
+    status = "okay";
+    nvmem-cells = <&macaddr_factory_3fff4>;
+    nvmem-cell-names = "mac-address";
+};
+
+&gmac1 {
+    status = "okay";
+	label = "wan";
+    nvmem-cells = <&macaddr_factory_3fffa>;
+    nvmem-cell-names = "mac-address";
+	 fixed-link {
+        speed = <1000>;
+        full-duplex;
+        pause;
+    };
+};
+
+&switch0 {
+    status = "okay";
+    ports {
+        port@0 {
+            status = "okay";
+            label = "lan1";
+        };
+        port@1 {
+            status = "okay";
+            label = "lan2";
+        };
+        port@2 {
+            status = "okay";
+            label = "lan3";
+        };
+		port@3 {
+            status = "okay";
+            label = "wan";
+        };
+    };
+};
+
+&state_default {
+	gpio {
+		groups = "jtag", "uart3","wdt";
+		function = "gpio";
+	};
+};
+DTS_EOF
+
+# 注入设备定义到 mt7621.mk
+cat >> target/linux/ramips/image/mt7621.mk << 'MK_EOF'
+
+define Device/qihoo_360t6gs
+  $(Device/nand)
+  $(Device/uimage-lzma-loader)
+  DEVICE_VENDOR := Qihoo
+  DEVICE_MODEL := 360 T6GS
+  IMAGE_SIZE := 125000k
+  KERNEL_IN_UBI := 1
+  IMAGES += firmware.bin
+  IMAGE/firmware.bin := append-kernel | pad-to $$(KERNEL_SIZE) | append-ubi | \
+	check-size
+  DEVICE_PACKAGES += kmod-mt7915-firmware
+endef
+TARGET_DEVICES += qihoo_360t6gs
+MK_EOF
+
+# 克隆 UA3F 源码
+git clone --depth=1 https://github.com/SunBK201/UA3F.git package/UA3F
+
+echo "diy-part1 done: DTS + mk + UA3F source injected"
