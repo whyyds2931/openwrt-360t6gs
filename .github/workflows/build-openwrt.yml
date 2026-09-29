@@ -1,4 +1,4 @@
-name: Build Heleguo LEDE 360 T6GS
+name: Build ImmortalWrt 360 T6GS
 
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ permissions:
   actions: write
 
 env:
-  REPO_URL: https://github.com/Heleguo/lede
+  REPO_URL: https://github.com/immortalwrt/immortalwrt
   REPO_BRANCH: master
   CONFIG_FILE: .config
   DIY_P1_SH: diy-part1.sh
